@@ -8,6 +8,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.serverless.response.ApiGatewayResponse;
 
 public class Handler implements RequestHandler<Map<String, Object>, ApiGatewayResponse> {
 
