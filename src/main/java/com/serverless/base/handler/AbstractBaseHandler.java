@@ -2,21 +2,27 @@ package com.serverless.base.handler;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.serverless.base.DeserializerStrategy;
 import com.serverless.base.RequestBodyDeserializerStrategy;
 import com.serverless.base.ResponseBodySerializerStrategy;
 import com.serverless.base.SerializerStrategy;
+import com.serverless.constants.HttpMethod;
 import com.serverless.exceptions.HttpException;
 import com.serverless.request.ApiGatewayRequest;
 import com.serverless.response.ApiGatewayResponse;
 import com.serverless.validation.DefaultValidator;
 import com.serverless.validation.RequestValidator;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpStatus;
 import org.apache.http.entity.ContentType;
 
+import javax.validation.Valid;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGatewayRequest, ApiGatewayResponse>
 {
@@ -41,17 +47,18 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
 
 
     private Class<?> parameterizedInput;
-    private Class<?> getParameterizedOutput;
+    private Class<?> parameterizedOutput;
 
     public AbstractBaseHandler()
     {
         ParameterizedType type= (ParameterizedType)getClass().getGenericSuperclass();
         this.parameterizedInput=(Class<?>)type.getActualTypeArguments()[0];
-        this.getParameterizedOutput=(Class<?>)type.getActualTypeArguments()[1];
+        this.parameterizedOutput=(Class<?>)type.getActualTypeArguments()[1];
     }
 
     @Override
     public ApiGatewayResponse handleRequest(ApiGatewayRequest request, Context context)
+
     {
         ResponseBodySerializerStrategy serializerStrategy=null;
         RequestBodyDeserializerStrategy deserializerStrategy=null;
@@ -59,26 +66,49 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
 
         I input=null;
         Object output=null;
+        int httpStatusCode= HttpStatus.SC_OK;
         try
         {
             //populate instance fields related to request
+            initRequestAttributes(request);
             //get content type
+            String contentType=getHeaders(HttpHeaders.CONTENT_TYPE).orElse(DEFAULT_CONTENT_TYPE);
             //get headers
+            String accept=getHeaders(HttpHeaders.ACCEPT).orElse(DEFAULT_CONTENT_TYPE);
             //get deserializer strategy
+            deserializerStrategy=resolveDeserializerStrategy(contentType);
             //get serializer strategy
+            serializerStrategy=resolveSerializerStrategy(accept);
             //call before method
-            //check if deserializerable
-            //if deserializerable deserialize else check input is not void
-        }
-        /*catch (HttpException httpException)
-        {
+            before(context);
+            //check if deserializable
+            boolean isDeserializable=isDeserializable();
+            if(isDeserializable)
+                input=deserializerStrategy.deserialize(rawBodyOrQueryString(),parameterizedInput);
+            else
+                input=isVoidInput()?null:(I)request;
 
-        }*/
+            if(shouldValidate() && isDeserializable)
+            {
+                validator=requestValidator();
+                validator.validate(input);
+            }
+
+            output=execute(input,context);
+            if(!isSerializable() && !isVoidOutput())
+                return (ApiGatewayResponse)output;
+        }
+        catch (HttpException httpException)
+        {
+            output=httpException.getEntity();
+            httpStatusCode=httpException.getHttpStatusCode();
+        }
         catch(Exception exception)
         {
-
+            httpStatusCode=HttpStatus.SC_INTERNAL_SERVER_ERROR;
         }
-        return null;
+        return ApiGatewayResponse.builder().setStatusCode(httpStatusCode)
+                .setHeaders(headers).setRawBody(getSerializedBody(output)).build();
     }
 
     private void initRequestAttributes(ApiGatewayRequest request)
@@ -87,10 +117,91 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
         httpMethod=request.getHttpMethod();
         path=request.getBody();
         resource=request.getResource();
+
+        headers=initOrDefaultHashMap(request.getHeaders());
+        stageVariables=initOrDefaultHashMap(request.getStageVariables());
+        pathParameters=initOrDefaultHashMap(request.getPathParameters());
+        queryStringParameters=initOrDefaultHashMap(request.getQueryStringParameters());
+        additionalProperties=initOrDefaultHashMap(request.getAdditionalProperties());
+    }
+
+    private Map<String,String> initOrDefaultHashMap(Map<String,String> map)
+    {
+        return Objects.isNull(map)?new HashMap<>():map;
+    }
+
+    private Optional<String> getHeaders(String key)
+    {
+        return Optional.ofNullable(headers.get(key));
+    }
+
+    private RequestBodyDeserializerStrategy resolveDeserializerStrategy(String contentType)
+    {
+        return DeserializerStrategy.strategy(contentType).orElse(DEFAULT_DESERIALIZER_STRATEGY).getDeserializerStrategy();
+    }
+
+    private ResponseBodySerializerStrategy resolveSerializerStrategy(String accept)
+    {
+        return SerializerStrategy.serializerStrategy(accept).orElse(DEFAULT_SERIALIZER_STRATEGY).getSerializerStrategy();
+    }
+
+    private String rawBodyOrQueryString() throws JsonProcessingException
+    {
+        if(!HttpMethod.GET.getName().equals(httpMethod))
+            return rawRequestBody;
+
+        return MAPPER.writeValueAsString(queryStringParameters);
+    }
+
+    private boolean isDeserializable()
+    {
+        return !ApiGatewayRequest.class.isAssignableFrom(parameterizedInput)
+                && !Void.class.isAssignableFrom(parameterizedInput);
+    }
+
+    private boolean isSerializable()
+    {
+        return !ApiGatewayResponse.class.isAssignableFrom(parameterizedOutput)
+                && !Void.class.isAssignableFrom(parameterizedOutput);
+    }
+
+    private boolean isVoidInput()
+    {
+        return Void.class.isAssignableFrom(parameterizedInput);
+    }
+
+    private boolean isVoidOutput()
+    {
+        return Void.class.isAssignableFrom(parameterizedOutput);
+    }
+
+    private boolean shouldValidate() throws NoSuchMethodException,SecurityException
+    {
+        Method method=getClass().getMethod(EXECUTE_METHOD,parameterizedInput,Context.class);
+        Annotation [][] annotations=method.getParameterAnnotations();
+        Annotation[] firstArgAnnotations= Arrays.stream(annotations).findFirst().get();
+        return Arrays.stream(firstArgAnnotations).anyMatch(a->a instanceof Valid);
+    }
+
+    private RequestValidator requestValidator()
+    {
+        return DEFAULT_REQUEST_VALIDATOR;
+    }
+
+    private String getSerializedBody(Object output)
+    {
+        String serializedBody=null;
+        try
+        {
+            serializedBody= MAPPER.writeValueAsString(output);
+        }
+        catch (JsonProcessingException e)
+        {
+
+        }
+        return serializedBody;
     }
 
     public abstract void before(Context context) throws HttpException;
     public abstract O execute(I input,Context context) throws HttpException;
-
-
 }

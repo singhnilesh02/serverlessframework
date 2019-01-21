@@ -18,7 +18,7 @@ public enum HttpMethod
     {
         this.method=method;
     }
-    public String getMethod()
+    public String getName()
     {
         return this.method;
     }

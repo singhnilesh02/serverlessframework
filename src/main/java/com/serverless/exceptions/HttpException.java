@@ -32,4 +32,14 @@ public abstract class HttpException extends Exception
         initCause(cause);
         this.httpStatusCode=httpStatusCode;
     }
+
+    public Object getEntity()
+    {
+        return this.entity;
+    }
+
+    public int getHttpStatusCode()
+    {
+        return this.httpStatusCode;
+    }
 }
