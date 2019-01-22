@@ -50,8 +50,15 @@ package:
   artifact: target/hello-dev.jar
 
 functions:
-  hello:
-    handler: com.serverless.Handler
+  trackingNumber:
+    handler: com.serverless.handler.GenerateTrackingNumber
+    name: TrackingNumberMicroservices
+    timeout: 30
+    events:
+      - http:
+          path: /api/sendOrder
+          method: post
+          cors: true
 
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
@@ -98,5 +105,3 @@ functions:
 #       Description: "Description for the output"
 #       Value: "Some output value"
 
-plugins:
-  - serverless-step-functions

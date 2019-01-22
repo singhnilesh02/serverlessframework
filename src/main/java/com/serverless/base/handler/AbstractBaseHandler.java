@@ -116,7 +116,7 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
             httpStatusCode=HttpStatus.SC_INTERNAL_SERVER_ERROR;
         }
         return ApiGatewayResponse.builder().setStatusCode(httpStatusCode)
-                .setHeaders(headers).setObjectBody(output).build();
+                .setHeaders(responseHeaders).setObjectBody(output).build();
     }
 
     private void initRequestAttributes(ApiGatewayRequest request)
@@ -196,6 +196,12 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
         return DEFAULT_REQUEST_VALIDATOR;
     }
 
+    public void addResponseHeaders(String key,String value)
+    {
+        responseHeaders.put(key,value);
+    }
+
     public abstract void before(Context context) throws HttpException;
     public abstract O execute(I input,Context context) throws HttpException;
+
 }
