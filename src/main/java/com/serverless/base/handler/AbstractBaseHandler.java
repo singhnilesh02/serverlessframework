@@ -12,6 +12,7 @@ import com.serverless.constants.HttpMethod;
 import com.serverless.exceptions.HttpException;
 import com.serverless.request.ApiGatewayRequest;
 import com.serverless.response.ApiGatewayResponse;
+import com.serverless.response.DefaultErrorResponse;
 import com.serverless.validation.DefaultValidator;
 import com.serverless.validation.RequestValidator;
 import org.apache.http.HttpHeaders;
@@ -84,9 +85,13 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
             //check if deserializable
             boolean isDeserializable=isDeserializable();
             if(isDeserializable)
+            {
                 input=deserializerStrategy.deserialize(rawBodyOrQueryString(),parameterizedInput);
+            }
             else
+            {
                 input=isVoidInput()?null:(I)request;
+            }
 
             if(shouldValidate() && isDeserializable)
             {
@@ -96,7 +101,9 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
 
             output=execute(input,context);
             if(!isSerializable() && !isVoidOutput())
+            {
                 return (ApiGatewayResponse)output;
+            }
         }
         catch (HttpException httpException)
         {
@@ -105,10 +112,11 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
         }
         catch(Exception exception)
         {
+            output=new DefaultErrorResponse(exception.getMessage());
             httpStatusCode=HttpStatus.SC_INTERNAL_SERVER_ERROR;
         }
         return ApiGatewayResponse.builder().setStatusCode(httpStatusCode)
-                .setHeaders(headers).setRawBody(getSerializedBody(output)).build();
+                .setHeaders(headers).setObjectBody(output).build();
     }
 
     private void initRequestAttributes(ApiGatewayRequest request)
@@ -186,20 +194,6 @@ public abstract class AbstractBaseHandler<I,O> implements RequestHandler<ApiGate
     private RequestValidator requestValidator()
     {
         return DEFAULT_REQUEST_VALIDATOR;
-    }
-
-    private String getSerializedBody(Object output)
-    {
-        String serializedBody=null;
-        try
-        {
-            serializedBody= MAPPER.writeValueAsString(output);
-        }
-        catch (JsonProcessingException e)
-        {
-
-        }
-        return serializedBody;
     }
 
     public abstract void before(Context context) throws HttpException;
