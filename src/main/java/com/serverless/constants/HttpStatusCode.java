@@ -6,4 +6,5 @@ public interface HttpStatusCode extends HttpStatus
 {
     int TRACKING_NUMBER_NOTGENERATED=102;
     int TRACKING_NUMBER_NOTFOUND=103;
+    int SERVICE_NOTFOUND=104;
 }
