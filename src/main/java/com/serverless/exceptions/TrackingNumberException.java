@@ -1,26 +1,27 @@
 package com.serverless.exceptions;
 
+import com.serverless.constants.HttpStatusCode;
 import org.apache.http.HttpStatus;
 
 public class TrackingNumberException extends HttpException
 {
     public TrackingNumberException()
     {
-        super(HttpStatus.SC_NOT_IMPLEMENTED);
+        super(HttpStatusCode.TRACKING_NUMBER_NOTFOUND);
     }
 
     public TrackingNumberException(Object entity)
     {
-        super(entity,HttpStatus.SC_NOT_IMPLEMENTED);
+        super(entity,HttpStatusCode.TRACKING_NUMBER_NOTFOUND);
     }
 
     public TrackingNumberException(final String message,Throwable cause)
     {
-        super(HttpStatus.SC_NOT_IMPLEMENTED,message,cause);
+        super(HttpStatusCode.TRACKING_NUMBER_NOTFOUND,message,cause);
     }
 
     public TrackingNumberException(Object entity,final String message,Throwable cause)
     {
-        super(entity,HttpStatus.SC_NOT_IMPLEMENTED,message,cause);
+        super(entity,HttpStatusCode.TRACKING_NUMBER_NOTFOUND,message,cause);
     }
 }
