@@ -4,7 +4,7 @@ import com.serverless.exceptions.TrackingNumberException;
 import com.serverless.request.TrackingNumberRequest;
 import com.serverless.response.TrackingNumberResponse;
 
-public class TrackingNumberService implements ITrackingNumberService
+public class ServiceMasterService implements IServiceMasterService
 {
 
     @Override

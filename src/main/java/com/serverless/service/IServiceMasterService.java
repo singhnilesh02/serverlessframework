@@ -4,7 +4,7 @@ import com.serverless.exceptions.TrackingNumberException;
 import com.serverless.request.TrackingNumberRequest;
 import com.serverless.response.TrackingNumberResponse;
 
-public interface ITrackingNumberService
+public interface IServiceMasterService
 {
     TrackingNumberResponse GenerateTrackingNumber(TrackingNumberRequest trackingNumberRequest)
             throws TrackingNumberException;
